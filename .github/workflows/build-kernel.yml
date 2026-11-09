@@ -42,6 +42,11 @@ jobs:
           sed -i '/obj-$(CONFIG_KSU) += kernelsu\//d' drivers/Makefile
           sed -i '/source "drivers\/kernelsu\/Kconfig"/d' drivers/Kconfig
           curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s v3.4.0-legacy
+          # This 5.4 tree backported copy_to_kernel_nofault and removed
+          # probe_kernel_write, so the driver's pre-5.8 fallback would link
+          # against a symbol that does not exist. Use the real function.
+          sed -i 's/^#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 8, 0)$/#if 0/' drivers/kernelsu/hook/patch_memory.c
+          grep -n "copy_to_kernel_nofault" drivers/kernelsu/hook/patch_memory.c | head -3
 
       - name: Apply veux patch (defconfig, localversion, can_umount fix)
         working-directory: kernel
