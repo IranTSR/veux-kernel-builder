@@ -1,0 +1,102 @@
+name: Build veux kernel (IranTSR + KernelSU Next)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-kernel.yml'
+      - 'patches/**'
+      - 'anykernel.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout builder repo
+        uses: actions/checkout@v4
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq flex bison bc libssl-dev libelf-dev cpio rsync lz4 zstd git curl zip unzip python3
+
+      - name: Clone kernel source (dereference23, tag 20260613)
+        run: git clone --depth 1 --branch 20260613 https://github.com/dereference23/kernel_xiaomi_sm6375.git kernel
+
+      - name: Clone toolchains (clang r416183b + GCC 4.9)
+        run: |
+          git clone --depth 1 --branch lineage-20.0 https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r416183b.git clang-r416183b
+          git clone --depth 1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git gcc64
+          git clone --depth 1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git gcc32
+          ./clang-r416183b/bin/clang --version | head -1
+
+      - name: Integrate KernelSU Next (legacy v3.4.0)
+        working-directory: kernel
+        run: |
+          rm -rf drivers/kernelsu
+          sed -i '/obj-$(CONFIG_KSU) += kernelsu\//d' drivers/Makefile
+          sed -i '/source "drivers\/kernelsu\/Kconfig"/d' drivers/Kconfig
+          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s v3.4.0-legacy
+
+      - name: Apply veux patch (defconfig, localversion, can_umount fix)
+        working-directory: kernel
+        run: |
+          git apply ../patches/veux.patch
+          git diff --stat
+
+      - name: Build kernel
+        working-directory: kernel
+        run: |
+          # Remove .git so setlocalversion does not append a git hash:
+          # the version string must read exactly 5.4.302-IranTSR.
+          rm -rf .git
+          export PATH="$GITHUB_WORKSPACE/clang-r416183b/bin:$GITHUB_WORKSPACE/gcc64/bin:$GITHUB_WORKSPACE/gcc32/bin:$PATH"
+          make ARCH=arm64 O=out CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- veux_defconfig < /dev/null
+          echo '--- resolved config ---'
+          grep -E 'CONFIG_KSU=|CONFIG_KSU_SYSCALL_TABLE_HOOK=|CONFIG_LOCALVERSION=|CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL=|CONFIG_WQ_POWER_EFFICIENT_DEFAULT=|CONFIG_ENERGY_MODEL=' out/.config
+          make ARCH=arm64 O=out CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- -j"$(nproc)" Image.gz-dtb modules < /dev/null
+          echo '--- kernel release ---'
+          make ARCH=arm64 O=out kernelrelease | tail -1
+          ls -la out/arch/arm64/boot/
+
+      - name: Clone AnyKernel3
+        run: git clone --depth 1 https://github.com/osm0sis/AnyKernel3.git ak3
+
+      - name: Package AnyKernel3 zip
+        run: |
+          cp kernel/out/arch/arm64/boot/Image.gz-dtb ak3/Image.gz-dtb
+          cp anykernel.sh ak3/anykernel.sh
+          rm -rf ak3/.git
+          cd ak3 && zip -r9 ../veux-IranTSR-KSU-Next.zip * && cd ..
+          ls -la veux-IranTSR-KSU-Next.zip
+          unzip -l veux-IranTSR-KSU-Next.zip
+
+      - name: Verify kernel image
+        run: |
+          mkdir -p /tmp/img && cd /tmp/img
+          unzip -p "$GITHUB_WORKSPACE/veux-IranTSR-KSU-Next.zip" Image.gz-dtb > Image.gz-dtb
+          ls -la Image.gz-dtb
+          gzip -dc Image.gz-dtb > Image || true
+          echo '--- Linux version string ---'
+          strings Image | grep -E '^Linux version 5\.4\.302' | head -2
+          test -s Image.gz-dtb
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: veux-IranTSR-KSU-Next
+          path: veux-IranTSR-KSU-Next.zip
+
+      - name: Create release with zip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="veux-IranTSR-$(date +%Y%m%d-%H%M)"
+          gh release create "$TAG" veux-IranTSR-KSU-Next.zip \
+            --title "veux kernel IranTSR + KernelSU Next ($TAG)" \
+            --notes "POCO X4 Pro 5G (veux) kernel 5.4.302-IranTSR with KernelSU-Next legacy v3.4.0 (kernel KSU version 33294, pairs with manager v3.4.2). Flash via OrangeFox (AnyKernel3). Back up the Boot partition first!"

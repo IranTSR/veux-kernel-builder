@@ -1,0 +1,58 @@
+diff --git a/arch/arm64/configs/veux_defconfig b/arch/arm64/configs/veux_defconfig
+index 99ea6306a..42a73051c 100644
+--- a/arch/arm64/configs/veux_defconfig
++++ b/arch/arm64/configs/veux_defconfig
+@@ -1,4 +1,4 @@
+-CONFIG_LOCALVERSION="-qgki"
++CONFIG_LOCALVERSION="-IranTSR"
+ CONFIG_NO_HZ=y
+ CONFIG_HIGH_RES_TIMERS=y
+ CONFIG_PREEMPT=y
+@@ -738,7 +738,7 @@ CONFIG_CRC8=y
+ CONFIG_XZ_DEC=y
+ CONFIG_DMA_CMA=y
+ CONFIG_PRINTK_TIME=y
+-CONFIG_DEBUG_INFO=y
++# CONFIG_DEBUG_INFO is not set
+ CONFIG_DEBUG_INFO_DWARF4=y
+ # CONFIG_SECTION_MISMATCH_WARN_ONLY is not set
+ CONFIG_MAGIC_SYSRQ=y
+@@ -749,3 +749,17 @@ CONFIG_UBSAN_TRAP=y
+ # CONFIG_UBSAN_SHIFT is not set
+ # CONFIG_UBSAN_BOOL is not set
+ # CONFIG_UBSAN_ENUM is not set
++
++# KernelSU Next (legacy driver v3.4.0-legacy) - added for veux custom kernel build
++CONFIG_MODULES=y
++CONFIG_KPROBES=y
++CONFIG_KRETPROBES=y
++CONFIG_KPROBE_EVENTS=y
++CONFIG_KALLSYMS=y
++CONFIG_KALLSYMS_ALL=y
++CONFIG_KSU=y
++CONFIG_KSU_SYSCALL_TABLE_HOOK=y
++# CONFIG_KSU_MANUAL_HOOK is not set
++
++# Battery tuning (safe, conservative) - added for IranTSR kernel build
++CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL=y
+diff --git a/fs/namespace.c b/fs/namespace.c
+index 56a7f19ce..491ab6d8a 100644
+--- a/fs/namespace.c
++++ b/fs/namespace.c
+@@ -1692,7 +1692,7 @@ static inline bool may_mandlock(void)
+ #endif
+ 
+ #ifdef CONFIG_KSU
+-static inline int can_umount(const struct path *path, int flags)
++static int can_umount(const struct path *path, int flags)
+ {
+ 	struct mount *mnt = real_mount(path->mnt);
+ 
+diff --git a/localversion b/localversion
+index 368a9b888..5341dd69f 100644
+--- a/localversion
++++ b/localversion
+@@ -1 +1 @@
+-~positron
++-IranTSR
+\ No newline at end of file
