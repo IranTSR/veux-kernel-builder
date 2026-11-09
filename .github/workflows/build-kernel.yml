@@ -64,7 +64,14 @@ jobs:
           make ARCH=arm64 O=out CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- veux_defconfig < /dev/null
           echo '--- resolved config ---'
           grep -E 'CONFIG_KSU=|CONFIG_KSU_SYSCALL_TABLE_HOOK=|CONFIG_LOCALVERSION=|CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL=|CONFIG_WQ_POWER_EFFICIENT_DEFAULT=|CONFIG_ENERGY_MODEL=' out/.config
-          make ARCH=arm64 O=out CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- -j"$(nproc)" Image.gz-dtb modules < /dev/null
+          make ARCH=arm64 O=out CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- -j"$(nproc)" Image.gz dtbs modules < /dev/null
+          # This tree has no Image.gz-dtb make target (its
+          # arch/arm64/boot/Makefile only defines Image/Image.gz/...), so
+          # append the veux DTB by hand. The device DTB is
+          # arch/arm64/boot/dts/vendor/xiaomi/veux.dts (CONFIG_ARCH_BLAIR,
+          # CONFIG_BUILD_ARM64_DT_OVERLAY=y builds veux.dtb as the overlay base).
+          cat out/arch/arm64/boot/Image.gz out/arch/arm64/boot/dts/vendor/xiaomi/veux.dtb > out/arch/arm64/boot/Image.gz-dtb
+          ls -la out/arch/arm64/boot/Image.gz-dtb out/arch/arm64/boot/dts/vendor/xiaomi/veux.dtb
           echo '--- kernel release ---'
           make ARCH=arm64 O=out kernelrelease | tail -1
           ls -la out/arch/arm64/boot/
